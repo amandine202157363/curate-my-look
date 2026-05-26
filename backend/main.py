@@ -64,7 +64,11 @@ async def generate(request: GenerateRequest):
 
     outfit_key = build_outfit_key(request.items)
 
-    cached_url = get_cached_image(outfit_key)
+    try:
+        cached_url = get_cached_image(outfit_key)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Supabase cache lookup failed: {e}")
+
     if cached_url:
         return GenerateResponse(outfit_key=outfit_key, image_url=cached_url, cached=True)
 
