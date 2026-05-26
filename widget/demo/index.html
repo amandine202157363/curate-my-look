@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CBY Widget Demo</title>
+  <style>
+    body { font-family: sans-serif; background: #f9f9f9; padding: 40px; }
+    h1 { font-size: 28px; margin-bottom: 8px; }
+    p  { color: #666; margin-bottom: 24px; }
+    .store-hero { background: #fff; border-radius: 12px; padding: 32px; max-width: 600px; box-shadow: 0 2px 12px rgba(0,0,0,.07); }
+    .store-hero img { width: 100%; border-radius: 8px; margin-bottom: 16px; }
+    .price { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+    .fake-btn { background: #111; color: #fff; border: none; border-radius: 8px; padding: 12px 24px; font-size: 15px; cursor: pointer; }
+  </style>
+</head>
+<body>
+
+  <h1>Acme Fashion</h1>
+  <p>A pretend store. The "Style This Look" button (bottom-right) is the CBY widget.</p>
+
+  <div class="store-hero">
+    <p class="price">$89 — Classic Linen Shirt</p>
+    <button class="fake-btn">Add to cart</button>
+  </div>
+
+  <!--
+    Step 1: configure the widget.
+    In a real store this would come from the theme's product data.
+    Use real image URLs — placeholder.co works fine for testing.
+  -->
+  <script>
+    window.CBYConfig = {
+      apiUrl: 'http://localhost:8000',   // your FastAPI backend (change for production)
+      triggerLabel: '✦ Style This Look',
+      currency: 'USD',
+
+      // Called when the shopper clicks "Add All to Cart".
+      // Replace the console.log with your store's cart API.
+      onAddToCart: function(items) {
+        console.log('Add to cart:', items);
+        alert('Added ' + items.length + ' items! (Hook onAddToCart to your store\'s cart API)');
+      },
+
+      categories: {
+        tops: [
+          { id: 't1', name: 'White Linen Shirt',  image_url: 'https://placehold.co/300x300/f0ece4/333?text=White+Shirt',  price: 89,  cart_id: 'sku-t1' },
+          { id: 't2', name: 'Black Crop Tee',      image_url: 'https://placehold.co/300x300/222/fff?text=Black+Crop',      price: 45,  cart_id: 'sku-t2' },
+          { id: 't3', name: 'Striped Breton Top',  image_url: 'https://placehold.co/300x300/dde/333?text=Striped+Top',     price: 65,  cart_id: 'sku-t3' },
+        ],
+        bottoms: [
+          { id: 'b1', name: 'High-waist Trousers', image_url: 'https://placehold.co/300x300/d4cbb8/333?text=Trousers',     price: 110, cart_id: 'sku-b1' },
+          { id: 'b2', name: 'Denim Straight Jeans', image_url: 'https://placehold.co/300x300/4a6fa5/fff?text=Jeans',       price: 95,  cart_id: 'sku-b2' },
+          { id: 'b3', name: 'Floral Midi Skirt',   image_url: 'https://placehold.co/300x300/f5c2c7/333?text=Midi+Skirt',  price: 79,  cart_id: 'sku-b3' },
+        ],
+        shoes: [
+          { id: 's1', name: 'White Leather Sneakers', image_url: 'https://placehold.co/300x300/fff/333?text=Sneakers',   price: 130, cart_id: 'sku-s1' },
+          { id: 's2', name: 'Tan Leather Loafers',    image_url: 'https://placehold.co/300x300/c8a97e/333?text=Loafers', price: 145, cart_id: 'sku-s2' },
+          { id: 's3', name: 'Black Ankle Boots',      image_url: 'https://placehold.co/300x300/1a1a1a/fff?text=Boots',   price: 160, cart_id: 'sku-s3' },
+        ],
+        accessories: [
+          { id: 'a1', name: 'Woven Tote Bag',    image_url: 'https://placehold.co/300x300/e8d5b7/333?text=Tote',        price: 55,  cart_id: 'sku-a1' },
+          { id: 'a2', name: 'Gold Hoop Earrings', image_url: 'https://placehold.co/300x300/f5d77e/333?text=Earrings',   price: 38,  cart_id: 'sku-a2' },
+          { id: 'a3', name: 'Silk Scarf',         image_url: 'https://placehold.co/300x300/f9c6c9/333?text=Scarf',      price: 49,  cart_id: 'sku-a3' },
+        ],
+      }
+    };
+  </script>
+
+  <!--
+    Step 2: load the widget.
+    During development we load directly from src/.
+    For production this becomes a single bundled cby.js file on a CDN.
+  -->
+  <script type="module" src="../src/widget.js"></script>
+
+</body>
+</html>

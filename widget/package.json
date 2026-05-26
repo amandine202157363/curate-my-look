@@ -1,0 +1,10 @@
+{
+  "name": "cby-widget",
+  "version": "0.1.0",
+  "description": "CBY — mix-and-match styling widget for e-commerce",
+  "type": "module",
+  "scripts": {
+    "demo": "npx serve demo -p 3000",
+    "build": "npx esbuild src/widget.js --bundle --outfile=dist/cby.js --minify --format=iife"
+  }
+}
