@@ -22,15 +22,17 @@ def get_cached_image(outfit_key: str) -> Optional[str]:
     Look up an already-generated outfit image by its combination key.
     Returns the public image URL if found, or None if this combo is new.
     """
+    # .limit(1) + checking result.data is more reliable than .maybe_single()
+    # which throws an APIError on empty results in some supabase-py versions.
     result = (
         _client.table("outfit_cache")
         .select("image_url")
         .eq("outfit_key", outfit_key)
-        .maybe_single()
+        .limit(1)
         .execute()
     )
-    if result and result.data:
-        return result.data["image_url"]
+    if result.data:
+        return result.data[0]["image_url"]
     return None
 
 
