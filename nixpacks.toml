@@ -1,8 +1,0 @@
-# Tells Railway/Nixpacks where to find the Python dependencies
-# and which version of Python to use.
-
-[phases.setup]
-nixPkgs = ["python311"]
-
-[phases.install]
-cmds = ["pip install -r backend/requirements.txt"]
