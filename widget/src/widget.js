@@ -1,31 +1,6 @@
 /**
  * CBY Widget — "Curate By You"
- *
- * This is the entire widget in one file. Brands embed it with a single script tag:
- *
- *   <script>
- *     window.CBYConfig = {
- *       apiUrl: 'https://your-backend.railway.app',
- *       storeId: 'my-store',           // optional, for analytics later
- *       triggerLabel: 'Style This Look', // button text, optional
- *       currency: 'USD',               // optional
- *       onAddToCart: function(items) {  // called when shopper clicks Add to Cart
- *         items.forEach(function(item) {
- *           // use the store's own cart API here, e.g. Shopify's fetch('/cart/add.js')
- *           console.log('add to cart:', item.cart_id, item.name);
- *         });
- *       },
- *       categories: {
- *         tops:        [ { id:'t1', name:'White Tee',    image_url:'...', price:29, cart_id:'sku-t1' }, ... ],
- *         bottoms:     [ ... ],
- *         shoes:       [ ... ],
- *         accessories: [ ... ]
- *       }
- *     };
- *   </script>
- *   <script src="cby.js"></script>
- *
- * The widget reads window.CBYConfig and builds the full UI automatically.
+ * Embed with a single script tag after setting window.CBYConfig.
  */
 
 import { CSS } from './styles.js';
@@ -33,327 +8,393 @@ import { CSS } from './styles.js';
 (function () {
   'use strict';
 
-  // ─── Config ───────────────────────────────────────────────────────────────
-
-  const config = window.CBYConfig || {};
-  const API_URL = (config.apiUrl || 'http://localhost:8000').replace(/\/$/, '');
-  const CURRENCY = config.currency || 'USD';
-  const TRIGGER_LABEL = config.triggerLabel || '✦ Style This Look';
-  const CATEGORIES = config.categories || {};
+  // ─── Config ────────────────────────────────────────────────────────────────
+  const config       = window.CBYConfig || {};
+  const API_URL      = (config.apiUrl || 'http://localhost:8000').replace(/\/$/, '');
+  const CURRENCY     = config.currency || 'USD';
+  const CATEGORIES   = config.categories || {};
+  const HERO_IMAGE   = config.heroImage || '';   // default product photo shown in left panel
   const ON_ADD_TO_CART = typeof config.onAddToCart === 'function' ? config.onAddToCart : null;
 
-  const CATEGORY_META = {
-    tops:        { label: 'Tops',        icon: '👕' },
-    bottoms:     { label: 'Bottoms',     icon: '👖' },
-    shoes:       { label: 'Shoes',       icon: '👟' },
-    accessories: { label: 'Accessories', icon: '💍' },
+  const CATEGORY_LABELS = {
+    tops:        'Tops',
+    bottoms:     'Bottoms',
+    shoes:       'Shoes',
+    accessories: 'Accessories',
   };
 
-  // ─── State ────────────────────────────────────────────────────────────────
+  // ─── State ─────────────────────────────────────────────────────────────────
+  // One selected item per category, keyed by category name
+  const selected  = {};
+  // Tile scroll offsets, keyed by category name (how many tiles scrolled right)
+  const offsets   = {};
+  let generatedUrl  = null;
+  let isGenerating  = false;
 
-  // selectedItems: { [category]: item | null }
-  const selectedItems = {};
-  let activeCategory = Object.keys(CATEGORIES)[0] || 'tops';
-  let generatedImageUrl = null;
-  let isGenerating = false;
-
-  // ─── Inject styles ────────────────────────────────────────────────────────
-
+  // ─── Inject styles ─────────────────────────────────────────────────────────
   const styleEl = document.createElement('style');
   styleEl.textContent = CSS;
   document.head.appendChild(styleEl);
 
-  // ─── Build DOM ────────────────────────────────────────────────────────────
-
-  // Root wrapper (keeps everything namespaced)
+  // ─── Root wrapper ──────────────────────────────────────────────────────────
   const root = document.createElement('div');
   root.className = 'cby-root';
 
-  // Trigger button
+  // ─── Trigger button ────────────────────────────────────────────────────────
   const trigger = document.createElement('button');
   trigger.className = 'cby-trigger';
-  trigger.textContent = TRIGGER_LABEL;
+  trigger.textContent = config.triggerLabel || 'Curate My Look';
 
-  // Overlay + popup
+  // ─── Overlay ───────────────────────────────────────────────────────────────
   const overlay = document.createElement('div');
   overlay.className = 'cby-overlay';
 
-  const popup = document.createElement('div');
-  popup.className = 'cby-popup';
-  popup.setAttribute('role', 'dialog');
-  popup.setAttribute('aria-modal', 'true');
-  popup.setAttribute('aria-label', 'Style your look');
+  // ─── Modal ─────────────────────────────────────────────────────────────────
+  const modal = document.createElement('div');
+  modal.className = 'cby-modal';
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
 
   // ── Header
   const header = document.createElement('div');
   header.className = 'cby-header';
-  header.innerHTML = `<h2>Mix & Match Your Look</h2>`;
+
+  const headerLeft = document.createElement('div');
+  headerLeft.className = 'cby-header-left';
+
+  const title = document.createElement('span');
+  title.className = 'cby-title';
+  title.textContent = 'Curate My Look';
+
+  const hint = document.createElement('span');
+  hint.className = 'cby-hint';
+  hint.textContent = 'Select items to build your outfit';
+
   const closeBtn = document.createElement('button');
   closeBtn.className = 'cby-close';
   closeBtn.setAttribute('aria-label', 'Close');
   closeBtn.textContent = '×';
+
+  headerLeft.appendChild(title);
+  headerLeft.appendChild(hint);
+  header.appendChild(headerLeft);
   header.appendChild(closeBtn);
 
   // ── Body
   const body = document.createElement('div');
   body.className = 'cby-body';
 
-  // Sidebar (category tabs)
-  const sidebar = document.createElement('div');
-  sidebar.className = 'cby-sidebar';
+  // ── Left panel
+  const panelLeft = document.createElement('div');
+  panelLeft.className = 'cby-panel-left';
 
-  // Grid area (item cards)
-  const gridArea = document.createElement('div');
-  gridArea.className = 'cby-grid-area';
+  // Hero image area
+  const hero = document.createElement('div');
+  hero.className = 'cby-hero';
 
-  // Right preview panel
-  const preview = document.createElement('div');
-  preview.className = 'cby-preview';
-  preview.innerHTML = `<div class="cby-preview-header">Your Look</div>`;
-  const selectedList = document.createElement('div');
-  selectedList.className = 'cby-selected-items';
-  const resultImage = document.createElement('img');
-  resultImage.className = 'cby-result-image';
-  resultImage.alt = 'AI-generated outfit';
-  preview.appendChild(selectedList);
-  preview.appendChild(resultImage);
+  const heroImg = document.createElement('img');
+  heroImg.className = 'cby-hero-img';
+  heroImg.src = HERO_IMAGE;
+  heroImg.alt = 'Outfit preview';
 
-  body.appendChild(sidebar);
-  body.appendChild(gridArea);
-  body.appendChild(preview);
+  const spinnerWrap = document.createElement('div');
+  spinnerWrap.className = 'cby-spinner-wrap';
+  spinnerWrap.innerHTML = `
+    <div class="cby-spinner-ring"></div>
+    <div class="cby-spinner-text">Generating look…</div>
+  `;
 
-  // ── Footer
-  const footer = document.createElement('div');
-  footer.className = 'cby-footer';
+  hero.appendChild(heroImg);
+  hero.appendChild(spinnerWrap);
+
+  // Price panel
+  const pricePanel = document.createElement('div');
+  pricePanel.className = 'cby-price-panel';
+
+  // Buttons
+  const panelBtns = document.createElement('div');
+  panelBtns.className = 'cby-panel-btns';
+
   const generateBtn = document.createElement('button');
-  generateBtn.className = 'cby-btn cby-btn-generate';
+  generateBtn.className = 'cby-action-btn cby-btn-generate';
   generateBtn.textContent = 'Generate Look';
+  generateBtn.disabled = true;
+
   const cartBtn = document.createElement('button');
-  cartBtn.className = 'cby-btn cby-btn-cart';
+  cartBtn.className = 'cby-action-btn cby-btn-cart';
   cartBtn.textContent = 'Add All to Cart';
+
+  panelBtns.appendChild(generateBtn);
+  panelBtns.appendChild(cartBtn);
+
+  // Error message
   const errorMsg = document.createElement('div');
   errorMsg.className = 'cby-error';
 
-  footer.appendChild(generateBtn);
-  footer.appendChild(cartBtn);
+  panelLeft.appendChild(hero);
+  panelLeft.appendChild(pricePanel);
+  panelLeft.appendChild(panelBtns);
+  panelLeft.appendChild(errorMsg);
 
-  popup.appendChild(header);
-  popup.appendChild(body);
-  popup.appendChild(errorMsg);
-  popup.appendChild(footer);
+  // ── Right panel (category rows)
+  const panelRight = document.createElement('div');
+  panelRight.className = 'cby-panel-right';
 
-  overlay.appendChild(popup);
+  body.appendChild(panelLeft);
+  body.appendChild(panelRight);
+
+  modal.appendChild(header);
+  modal.appendChild(body);
+  overlay.appendChild(modal);
   root.appendChild(trigger);
   root.appendChild(overlay);
   document.body.appendChild(root);
 
-  // ─── Render functions ─────────────────────────────────────────────────────
+  // ─── Render helpers ────────────────────────────────────────────────────────
 
-  function renderTabs() {
-    sidebar.innerHTML = '';
-    Object.keys(CATEGORIES).forEach(function (cat) {
-      const meta = CATEGORY_META[cat] || { label: cat, icon: '●' };
-      const btn = document.createElement('button');
-      btn.className = 'cby-tab' + (cat === activeCategory ? ' cby-active' : '');
-      btn.innerHTML = `<span class="cby-tab-icon">${meta.icon}</span>${meta.label}`;
-      btn.addEventListener('click', function () {
-        activeCategory = cat;
-        renderTabs();
-        renderGrid();
-      });
-      sidebar.appendChild(btn);
-    });
+  function formatPrice(p) {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: CURRENCY }).format(p);
   }
 
-  function formatPrice(price) {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: CURRENCY }).format(price);
-  }
-
-  function renderGrid() {
-    gridArea.innerHTML = '';
-    const items = CATEGORIES[activeCategory] || [];
-    if (!items.length) {
-      gridArea.innerHTML = '<p style="color:#bbb;font-size:13px;padding:8px;">No items in this category.</p>';
-      return;
-    }
-    const label = document.createElement('div');
-    label.className = 'cby-category-label';
-    label.textContent = (CATEGORY_META[activeCategory] || {}).label || activeCategory;
-    gridArea.appendChild(label);
-
-    const grid = document.createElement('div');
-    grid.className = 'cby-grid';
-
-    items.forEach(function (item) {
-      const isSelected = selectedItems[activeCategory] && selectedItems[activeCategory].id === item.id;
-      const card = document.createElement('div');
-      card.className = 'cby-item-card' + (isSelected ? ' cby-selected' : '');
-      card.innerHTML = `
-        <img src="${item.image_url}" alt="${item.name}" loading="lazy" />
-        <div class="cby-item-info">
-          <div class="cby-item-name">${item.name}</div>
-          <div class="cby-item-price">${formatPrice(item.price)}</div>
-        </div>
-        <div class="cby-check">✓</div>
-      `;
-      card.addEventListener('click', function () {
-        if (isSelected) {
-          delete selectedItems[activeCategory];
-        } else {
-          selectedItems[activeCategory] = item;
-        }
-        // Reset generated image when selection changes
-        generatedImageUrl = null;
-        resultImage.classList.remove('cby-visible');
-        cartBtn.classList.remove('cby-visible');
-        renderGrid();
-        renderPreview();
-        updateGenerateBtn();
-      });
-      grid.appendChild(card);
-    });
-
-    gridArea.appendChild(grid);
-  }
-
-  function renderPreview() {
-    selectedList.innerHTML = '';
-    const items = Object.values(selectedItems).filter(Boolean);
+  function renderPricePanel() {
+    pricePanel.innerHTML = '';
+    const items = Object.values(selected).filter(Boolean);
 
     if (!items.length) {
-      selectedList.innerHTML = '<p class="cby-empty-state">Select items from each category to build your look.</p>';
+      const empty = document.createElement('div');
+      empty.className = 'cby-price-empty';
+      empty.textContent = 'No items selected yet';
+      pricePanel.appendChild(empty);
       return;
     }
 
+    let total = 0;
     items.forEach(function (item) {
-      const chip = document.createElement('div');
-      chip.className = 'cby-selected-chip';
-      chip.innerHTML = `
-        <img class="cby-chip-img" src="${item.image_url}" alt="${item.name}" />
-        <span class="cby-chip-name">${item.name}</span>
-      `;
-      const removeBtn = document.createElement('button');
-      removeBtn.className = 'cby-chip-remove';
-      removeBtn.setAttribute('aria-label', `Remove ${item.name}`);
-      removeBtn.textContent = '×';
-      removeBtn.addEventListener('click', function () {
-        // Find which category this item belongs to and remove it
-        Object.keys(selectedItems).forEach(function (cat) {
-          if (selectedItems[cat] && selectedItems[cat].id === item.id) {
-            delete selectedItems[cat];
-          }
-        });
-        generatedImageUrl = null;
-        resultImage.classList.remove('cby-visible');
-        cartBtn.classList.remove('cby-visible');
-        renderGrid();
-        renderPreview();
-        updateGenerateBtn();
-      });
-      chip.appendChild(removeBtn);
-      selectedList.appendChild(chip);
+      total += item.price;
+      const row = document.createElement('div');
+      row.className = 'cby-price-row';
+      row.innerHTML = `<span>${item.name}</span><span>${formatPrice(item.price)}</span>`;
+      pricePanel.appendChild(row);
     });
+
+    const totalRow = document.createElement('div');
+    totalRow.className = 'cby-price-total';
+    totalRow.innerHTML = `<span>Total</span><span>${formatPrice(total)}</span>`;
+    pricePanel.appendChild(totalRow);
   }
 
-  function updateGenerateBtn() {
-    const count = Object.values(selectedItems).filter(Boolean).length;
+  function updateButtons() {
+    const count = Object.values(selected).filter(Boolean).length;
     generateBtn.disabled = count === 0 || isGenerating;
   }
 
-  function showError(msg) {
-    errorMsg.textContent = msg;
-    errorMsg.classList.add('cby-visible');
-    setTimeout(function () { errorMsg.classList.remove('cby-visible'); }, 5000);
+  // Builds one category section and appends it to panelRight
+  function buildCategorySection(cat, items) {
+    const TILES_VISIBLE = 4;
+    offsets[cat] = 0;
+
+    const section = document.createElement('div');
+    section.className = 'cby-cat-section';
+    section.dataset.cat = cat;
+
+    // Header row with label + selection badge
+    const catHeader = document.createElement('div');
+    catHeader.className = 'cby-cat-header';
+
+    const catLabel = document.createElement('span');
+    catLabel.className = 'cby-cat-label';
+    catLabel.textContent = CATEGORY_LABELS[cat] || cat;
+
+    const badge = document.createElement('span');
+    badge.className = 'cby-cat-badge';
+    badge.dataset.cat = cat;
+    badge.textContent = '1';
+
+    catHeader.appendChild(catLabel);
+    catHeader.appendChild(badge);
+
+    // Tile row
+    const tileRow = document.createElement('div');
+    tileRow.className = 'cby-tile-row';
+
+    const prevBtn = document.createElement('button');
+    prevBtn.className = 'cby-swipe-btn';
+    prevBtn.setAttribute('aria-label', 'Previous');
+    prevBtn.textContent = '‹';
+    prevBtn.disabled = true;
+
+    const tilesWrap = document.createElement('div');
+    tilesWrap.className = 'cby-tiles-wrap';
+
+    const track = document.createElement('div');
+    track.className = 'cby-tiles-track';
+    track.dataset.cat = cat;
+
+    items.forEach(function (item) {
+      const tile = document.createElement('div');
+      tile.className = 'cby-tile';
+      tile.dataset.id = item.id;
+      tile.dataset.cat = cat;
+      tile.innerHTML = `
+        <img src="${item.image_url}" alt="${item.name}" loading="lazy" />
+        <div class="cby-tile-dot"></div>
+        <div class="cby-tile-label">${item.name}</div>
+      `;
+      tile.addEventListener('click', function () {
+        onTileClick(cat, item, tile, track, badge);
+      });
+      track.appendChild(tile);
+    });
+
+    tilesWrap.appendChild(track);
+
+    const nextBtn = document.createElement('button');
+    nextBtn.className = 'cby-swipe-btn';
+    nextBtn.setAttribute('aria-label', 'Next');
+    nextBtn.textContent = '›';
+    nextBtn.disabled = items.length <= TILES_VISIBLE;
+
+    // Prev/next scroll logic
+    prevBtn.addEventListener('click', function () {
+      offsets[cat] = Math.max(0, offsets[cat] - 1);
+      updateTrack(track, cat, items.length, TILES_VISIBLE, prevBtn, nextBtn);
+    });
+    nextBtn.addEventListener('click', function () {
+      offsets[cat] = Math.min(items.length - TILES_VISIBLE, offsets[cat] + 1);
+      updateTrack(track, cat, items.length, TILES_VISIBLE, prevBtn, nextBtn);
+    });
+
+    tileRow.appendChild(prevBtn);
+    tileRow.appendChild(tilesWrap);
+    tileRow.appendChild(nextBtn);
+
+    section.appendChild(catHeader);
+    section.appendChild(tileRow);
+    panelRight.appendChild(section);
   }
 
-  // ─── API calls ────────────────────────────────────────────────────────────
+  function updateTrack(track, cat, total, visible, prevBtn, nextBtn) {
+    // Each tile is 25% of the wrap width + 8px gap
+    const tileW = track.parentElement.offsetWidth * 0.25 - 6;
+    const shift = offsets[cat] * (tileW + 8);
+    track.style.transform = `translateX(-${shift}px)`;
+    prevBtn.disabled = offsets[cat] === 0;
+    nextBtn.disabled = offsets[cat] >= total - visible;
+  }
+
+  function onTileClick(cat, item, tile, track, badge) {
+    const isAlreadySelected = selected[cat] && selected[cat].id === item.id;
+
+    // Deselect all tiles in this category
+    track.querySelectorAll('.cby-tile').forEach(function (t) {
+      t.classList.remove('cby-selected');
+    });
+
+    if (isAlreadySelected) {
+      delete selected[cat];
+      badge.classList.remove('cby-visible');
+    } else {
+      selected[cat] = item;
+      tile.classList.add('cby-selected');
+      badge.classList.add('cby-visible');
+    }
+
+    // Reset generated image when selection changes
+    generatedUrl = null;
+    heroImg.src = HERO_IMAGE;
+    heroImg.classList.remove('cby-contain');
+    cartBtn.classList.remove('cby-visible');
+
+    renderPricePanel();
+    updateButtons();
+  }
+
+  // ─── API ───────────────────────────────────────────────────────────────────
 
   async function callGenerate() {
     if (isGenerating) return;
-    const items = Object.values(selectedItems).filter(Boolean);
+    const items = Object.values(selected).filter(Boolean);
     if (!items.length) return;
 
     isGenerating = true;
     generateBtn.disabled = true;
-    generateBtn.innerHTML = '<span class="cby-spinner"></span>Generating…';
+    generateBtn.textContent = 'Generating…';
+    spinnerWrap.classList.add('cby-active');
+    heroImg.style.opacity = '0.3';
     errorMsg.classList.remove('cby-visible');
 
     try {
-      const response = await fetch(`${API_URL}/generate`, {
+      const res = await fetch(`${API_URL}/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ items }),
       });
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.detail || `Server error ${response.status}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Error ${res.status}`);
       }
+      const data = await res.json();
+      generatedUrl = data.image_url;
 
-      const data = await response.json();
-      generatedImageUrl = data.image_url;
-
-      resultImage.src = generatedImageUrl;
-      resultImage.classList.add('cby-visible');
+      heroImg.src = generatedUrl;
+      heroImg.classList.add('cby-contain');
+      heroImg.style.opacity = '1';
       cartBtn.classList.add('cby-visible');
     } catch (err) {
-      showError('Could not generate image. Please try again.');
-      console.error('[CBY] Generate error:', err);
+      errorMsg.textContent = 'Could not generate image. Please try again.';
+      errorMsg.classList.add('cby-visible');
+      heroImg.style.opacity = '1';
+      console.error('[CBY]', err);
     } finally {
       isGenerating = false;
-      generateBtn.textContent = 'Regenerate';
-      updateGenerateBtn();
+      generateBtn.textContent = generatedUrl ? 'Regenerate' : 'Generate Look';
+      updateButtons();
+      spinnerWrap.classList.remove('cby-active');
     }
   }
 
   function handleAddToCart() {
-    const items = Object.values(selectedItems).filter(Boolean);
+    const items = Object.values(selected).filter(Boolean);
     if (!items.length) return;
-
     if (ON_ADD_TO_CART) {
       ON_ADD_TO_CART(items);
     } else {
-      // Fallback: log the items so brands can see what to hook into
-      console.info('[CBY] Add to cart called. Wire up window.CBYConfig.onAddToCart to handle these:', items);
-      alert(`${items.length} item(s) ready to add! Set window.CBYConfig.onAddToCart to handle cart logic.`);
+      console.info('[CBY] Wire up window.CBYConfig.onAddToCart to handle cart logic:', items);
+      alert(`${items.length} item(s) ready. Set window.CBYConfig.onAddToCart to handle cart.`);
     }
   }
 
-  // ─── Open / close ─────────────────────────────────────────────────────────
+  // ─── Open / close ──────────────────────────────────────────────────────────
 
-  function openPopup() {
+  function openModal() {
     overlay.classList.add('cby-open');
-    document.body.style.overflow = 'hidden'; // prevent background scroll
+    document.body.style.overflow = 'hidden';
     closeBtn.focus();
   }
 
-  function closePopup() {
+  function closeModal() {
     overlay.classList.remove('cby-open');
     document.body.style.overflow = '';
   }
 
-  // ─── Event listeners ──────────────────────────────────────────────────────
+  // ─── Event listeners ───────────────────────────────────────────────────────
 
-  trigger.addEventListener('click', openPopup);
-  closeBtn.addEventListener('click', closePopup);
+  trigger.addEventListener('click', openModal);
+  closeBtn.addEventListener('click', closeModal);
   generateBtn.addEventListener('click', callGenerate);
   cartBtn.addEventListener('click', handleAddToCart);
-
-  // Close on backdrop click
   overlay.addEventListener('click', function (e) {
-    if (e.target === overlay) closePopup();
+    if (e.target === overlay) closeModal();
   });
-
-  // Close on Escape key
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && overlay.classList.contains('cby-open')) closePopup();
+    if (e.key === 'Escape' && overlay.classList.contains('cby-open')) closeModal();
   });
 
-  // ─── Initial render ───────────────────────────────────────────────────────
+  // ─── Init ──────────────────────────────────────────────────────────────────
 
-  renderTabs();
-  renderGrid();
-  renderPreview();
-  updateGenerateBtn();
+  Object.keys(CATEGORIES).forEach(function (cat) {
+    buildCategorySection(cat, CATEGORIES[cat]);
+  });
+  renderPricePanel();
 
 })();

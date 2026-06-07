@@ -3,75 +3,245 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CBY Widget Demo</title>
+  <title>CBY — Demo Store</title>
   <style>
-    body { font-family: sans-serif; background: #f9f9f9; padding: 40px; }
-    h1 { font-size: 28px; margin-bottom: 8px; }
-    p  { color: #666; margin-bottom: 24px; }
-    .store-hero { background: #fff; border-radius: 12px; padding: 32px; max-width: 600px; box-shadow: 0 2px 12px rgba(0,0,0,.07); }
-    .store-hero img { width: 100%; border-radius: 8px; margin-bottom: 16px; }
-    .price { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
-    .fake-btn { background: #111; color: #fff; border: none; border-radius: 8px; padding: 12px 24px; font-size: 15px; cursor: pointer; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      background: #fff; color: #1a1a1a; font-size: 13px;
+    }
+
+    /* ── Nav ── */
+    .nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 32px; height: 56px;
+      background: #fff; border-bottom: 1px solid #e0e0e0;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .nav-logo {
+      font-size: 13px; font-weight: 500; letter-spacing: 0.22em;
+      text-transform: uppercase; color: #000; text-decoration: none;
+    }
+    .nav-links { display: flex; gap: 28px; }
+    .nav-links a {
+      font-size: 11px; letter-spacing: 0.09em; text-transform: uppercase;
+      color: #1a1a1a; text-decoration: none;
+    }
+    .nav-links a:hover { color: #767676; }
+    .nav-icons { display: flex; gap: 20px; align-items: center; }
+    .nav-icon { font-size: 18px; cursor: pointer; color: #1a1a1a; }
+
+    /* ── Breadcrumb ── */
+    .breadcrumb {
+      padding: 10px 32px; font-size: 11px; letter-spacing: 0.04em;
+      color: #767676; border-bottom: 1px solid #e0e0e0;
+    }
+    .breadcrumb a { color: #767676; text-decoration: none; }
+    .breadcrumb a:hover { color: #000; }
+    .breadcrumb span { margin: 0 6px; }
+
+    /* ── PDP layout ── */
+    .pdp { display: flex; min-height: calc(100vh - 89px); }
+
+    /* Product image */
+    .pdp-image {
+      width: 52%; background: #f5f4f1; overflow: hidden; flex-shrink: 0;
+    }
+    .pdp-image img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+    /* Product info */
+    .pdp-info {
+      flex: 1; padding: 52px 56px;
+      display: flex; flex-direction: column; overflow-y: auto;
+    }
+    .pdp-category {
+      font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+      color: #767676; margin-bottom: 10px;
+    }
+    .pdp-title {
+      font-size: 20px; font-weight: 400; letter-spacing: 0.03em;
+      line-height: 1.4; margin-bottom: 14px; color: #000;
+    }
+    .pdp-price {
+      font-size: 15px; font-weight: 400; color: #000;
+      margin-bottom: 32px; letter-spacing: 0.04em;
+    }
+    hr { border: none; border-top: 1px solid #e0e0e0; margin: 0 0 26px; }
+
+    /* Sizes */
+    .pdp-label {
+      font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+      color: #767676; margin-bottom: 12px;
+    }
+    .size-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 32px; }
+    .size-btn {
+      width: 48px; height: 48px; border: 1px solid #e0e0e0; background: #fff;
+      font-size: 12px; letter-spacing: 0.04em; cursor: pointer; color: #1a1a1a;
+      display: flex; align-items: center; justify-content: center;
+      font-family: inherit; transition: border-color 0.15s;
+    }
+    .size-btn:hover { border-color: #000; }
+    .size-btn.selected { background: #000; color: #fff; border-color: #000; }
+
+    /* CTA buttons */
+    .pdp-btn {
+      width: 100%; padding: 15px; border: 1px solid #000;
+      font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+      cursor: pointer; font-family: inherit; margin-bottom: 10px;
+      transition: background 0.15s, color 0.15s;
+    }
+    .pdp-btn-primary { background: #000; color: #fff; }
+    .pdp-btn-primary:hover { background: #333; }
+
+    /* ← the CBY widget trigger goes here, styled to match */
+    #cby-mount .cby-trigger {
+      font-size: 11px; letter-spacing: 0.14em;
+    }
+
+    .pdp-desc {
+      font-size: 12px; line-height: 1.9; color: #767676; margin-top: 32px;
+    }
   </style>
 </head>
 <body>
 
-  <h1>Acme Fashion</h1>
-  <p>A pretend store. The "Style This Look" button (bottom-right) is the CBY widget.</p>
+  <!-- Nav -->
+  <nav class="nav">
+    <a class="nav-logo" href="#">CBY Demo Store</a>
+    <div class="nav-links">
+      <a href="#">Woman</a>
+      <a href="#">Man</a>
+      <a href="#">Collection</a>
+      <a href="#">Sale</a>
+    </div>
+    <div class="nav-icons">
+      <span class="nav-icon">♡</span>
+      <span class="nav-icon">⊕</span>
+      <span class="nav-icon">◻</span>
+    </div>
+  </nav>
 
-  <div class="store-hero">
-    <p class="price">$89 — Classic Linen Shirt</p>
-    <button class="fake-btn">Add to cart</button>
+  <!-- Breadcrumb -->
+  <div class="breadcrumb">
+    <a href="#">Woman</a><span>›</span>
+    <a href="#">Shirts</a><span>›</span>
+    Classic Linen Shirt
   </div>
 
-  <!--
-    Step 1: configure the widget.
-    In a real store this would come from the theme's product data.
-    Use real image URLs — placeholder.co works fine for testing.
-  -->
+  <!-- PDP -->
+  <div class="pdp">
+    <div class="pdp-image">
+      <img
+        src="https://images.unsplash.com/photo-1594938298603-c8148c4b4357?w=800&q=80"
+        alt="Classic Linen Shirt"
+      />
+    </div>
+
+    <div class="pdp-info">
+      <p class="pdp-category">Shirts</p>
+      <h1 class="pdp-title">Classic Linen Shirt</h1>
+      <p class="pdp-price">€ 89.00</p>
+
+      <hr />
+
+      <p class="pdp-label">Size</p>
+      <div class="size-grid">
+        <button class="size-btn">XS</button>
+        <button class="size-btn">S</button>
+        <button class="size-btn selected">M</button>
+        <button class="size-btn">L</button>
+        <button class="size-btn">XL</button>
+      </div>
+
+      <button class="pdp-btn pdp-btn-primary">Add to Cart</button>
+
+      <!-- CBY widget renders its trigger button here -->
+      <div id="cby-mount"></div>
+
+      <p class="pdp-desc">
+        A relaxed shirt crafted from 100% European linen. Structured yet fluid,
+        it pairs effortlessly with tailored trousers or casual denim.
+        Available in a range of seasonal tones. Machine washable.
+      </p>
+    </div>
+  </div>
+
+  <!-- Size selector interaction -->
+  <script>
+    document.querySelectorAll('.size-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.size-btn').forEach(function(b) { b.classList.remove('selected'); });
+        btn.classList.add('selected');
+      });
+    });
+  </script>
+
+  <!-- ═══════════════════════════════════════════════
+       CBY WIDGET CONFIG
+       In a real store, item data comes from the platform's
+       product/collection API (e.g. Shopify's Storefront API).
+  ════════════════════════════════════════════════ -->
   <script>
     window.CBYConfig = {
       apiUrl: 'https://curate-my-look-production.up.railway.app',
-      triggerLabel: '✦ Style This Look',
-      currency: 'USD',
+      triggerLabel: 'Curate My Look',
+      currency: 'EUR',
 
-      // Called when the shopper clicks "Add All to Cart".
-      // Replace the console.log with your store's cart API.
+      // The product photo shown in the left panel before generation
+      heroImage: 'https://images.unsplash.com/photo-1594938298603-c8148c4b4357?w=400&q=80',
+
+      // Called when shopper clicks "Add All to Cart"
       onAddToCart: function(items) {
-        console.log('Add to cart:', items);
-        alert('Added ' + items.length + ' items! (Hook onAddToCart to your store\'s cart API)');
+        console.log('[CBY] Add to cart:', items);
+        alert('Added ' + items.length + ' items to cart!\n(Hook onAddToCart to your store\'s cart API)');
       },
 
       categories: {
         tops: [
-          { id: 't1', name: 'White Linen Shirt',  image_url: 'https://placehold.co/300x300/f0ece4/333?text=White+Shirt',  price: 89,  cart_id: 'sku-t1' },
-          { id: 't2', name: 'Black Crop Tee',      image_url: 'https://placehold.co/300x300/222/fff?text=Black+Crop',      price: 45,  cart_id: 'sku-t2' },
-          { id: 't3', name: 'Striped Breton Top',  image_url: 'https://placehold.co/300x300/dde/333?text=Striped+Top',     price: 65,  cart_id: 'sku-t3' },
+          { id: 't1', name: 'Classic Linen Shirt',   image_url: 'https://images.unsplash.com/photo-1594938298603-c8148c4b4357?w=400&q=80', price: 89,  cart_id: 'sku-t1' },
+          { id: 't2', name: 'Merino Knit Pullover',  image_url: 'https://images.unsplash.com/photo-1576566588028-4147f3842f27?w=400&q=80', price: 115, cart_id: 'sku-t2' },
+          { id: 't3', name: 'Striped Cotton Tee',    image_url: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400&q=80', price: 45,  cart_id: 'sku-t3' },
+          { id: 't4', name: 'Silk Blouse',           image_url: 'https://images.unsplash.com/photo-1564257577-a2f05d33de27?w=400&q=80', price: 135, cart_id: 'sku-t4' },
+          { id: 't5', name: 'Blazer',                image_url: 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=400&q=80', price: 220, cart_id: 'sku-t5' },
         ],
         bottoms: [
-          { id: 'b1', name: 'High-waist Trousers', image_url: 'https://placehold.co/300x300/d4cbb8/333?text=Trousers',     price: 110, cart_id: 'sku-b1' },
-          { id: 'b2', name: 'Denim Straight Jeans', image_url: 'https://placehold.co/300x300/4a6fa5/fff?text=Jeans',       price: 95,  cart_id: 'sku-b2' },
-          { id: 'b3', name: 'Floral Midi Skirt',   image_url: 'https://placehold.co/300x300/f5c2c7/333?text=Midi+Skirt',  price: 79,  cart_id: 'sku-b3' },
+          { id: 'b1', name: 'High-Waist Trousers',   image_url: 'https://images.unsplash.com/photo-1506629082955-511b1aa562c8?w=400&q=80', price: 110, cart_id: 'sku-b1' },
+          { id: 'b2', name: 'Straight Denim',        image_url: 'https://images.unsplash.com/photo-1542272454315-4c01d7abdf4a?w=400&q=80', price: 95,  cart_id: 'sku-b2' },
+          { id: 'b3', name: 'Midi Skirt',            image_url: 'https://images.unsplash.com/photo-1583496661160-fb5886a0aaaa?w=400&q=80', price: 85,  cart_id: 'sku-b3' },
+          { id: 'b4', name: 'Tailored Shorts',       image_url: 'https://images.unsplash.com/photo-1591195853828-11db59a44f43?w=400&q=80', price: 69,  cart_id: 'sku-b4' },
         ],
         shoes: [
-          { id: 's1', name: 'White Leather Sneakers', image_url: 'https://placehold.co/300x300/fff/333?text=Sneakers',   price: 130, cart_id: 'sku-s1' },
-          { id: 's2', name: 'Tan Leather Loafers',    image_url: 'https://placehold.co/300x300/c8a97e/333?text=Loafers', price: 145, cart_id: 'sku-s2' },
-          { id: 's3', name: 'Black Ankle Boots',      image_url: 'https://placehold.co/300x300/1a1a1a/fff?text=Boots',   price: 160, cart_id: 'sku-s3' },
+          { id: 's1', name: 'White Leather Sneakers', image_url: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&q=80', price: 130, cart_id: 'sku-s1' },
+          { id: 's2', name: 'Tan Leather Loafers',    image_url: 'https://images.unsplash.com/photo-1614252235316-8c857d38b5f4?w=400&q=80', price: 155, cart_id: 'sku-s2' },
+          { id: 's3', name: 'Ankle Boots',            image_url: 'https://images.unsplash.com/photo-1543163521-1bf539c55dd2?w=400&q=80', price: 165, cart_id: 'sku-s3' },
+          { id: 's4', name: 'Strappy Sandals',        image_url: 'https://images.unsplash.com/photo-1603487742131-4160ec999306?w=400&q=80', price: 99,  cart_id: 'sku-s4' },
         ],
         accessories: [
-          { id: 'a1', name: 'Woven Tote Bag',    image_url: 'https://placehold.co/300x300/e8d5b7/333?text=Tote',        price: 55,  cart_id: 'sku-a1' },
-          { id: 'a2', name: 'Gold Hoop Earrings', image_url: 'https://placehold.co/300x300/f5d77e/333?text=Earrings',   price: 38,  cart_id: 'sku-a2' },
-          { id: 'a3', name: 'Silk Scarf',         image_url: 'https://placehold.co/300x300/f9c6c9/333?text=Scarf',      price: 49,  cart_id: 'sku-a3' },
+          { id: 'a1', name: 'Structured Tote',        image_url: 'https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=400&q=80', price: 175, cart_id: 'sku-a1' },
+          { id: 'a2', name: 'Leather Belt',           image_url: 'https://images.unsplash.com/photo-1624222247344-550fb60583dc?w=400&q=80', price: 55,  cart_id: 'sku-a2' },
+          { id: 'a3', name: 'Silk Scarf',             image_url: 'https://images.unsplash.com/photo-1601924994987-69e26d50dc26?w=400&q=80', price: 65,  cart_id: 'sku-a3' },
+          { id: 'a4', name: 'Gold Earrings',          image_url: 'https://images.unsplash.com/photo-1630019852942-f89202989a59?w=400&q=80', price: 48,  cart_id: 'sku-a4' },
         ],
       }
     };
   </script>
 
-  <!--
-    Step 2: load the widget.
-    During development we load directly from src/.
-    For production this becomes a single bundled cby.js file on a CDN.
-  -->
+  <!-- Widget mounts its trigger button inside #cby-mount -->
+  <script>
+    // Override where the trigger button is inserted
+    // so it sits naturally in the PDP button stack.
+    document.addEventListener('DOMContentLoaded', function() {
+      var mount = document.getElementById('cby-mount');
+      if (mount) {
+        // Move the widget root into the mount point after it's created
+        var observer = new MutationObserver(function() {
+          var root = document.querySelector('.cby-root');
+          if (root) { mount.appendChild(root); observer.disconnect(); }
+        });
+        observer.observe(document.body, { childList: true });
+      }
+    });
+  </script>
   <script type="module" src="../src/widget.js"></script>
 
 </body>
