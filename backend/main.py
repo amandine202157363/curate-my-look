@@ -25,9 +25,9 @@ app = FastAPI(title="CBY API", version="0.1.0")
 # Serve the bundled widget JS file at /widget/cby.js
 # This is what brands embed: <script src="https://your-railway-url/widget/cby.js">
 # The path "../widget/dist" is relative to the backend/ folder.
-_widget_dist = os.path.join(os.path.dirname(__file__), "..", "widget", "dist")
-if os.path.isdir(_widget_dist):
-    app.mount("/widget", StaticFiles(directory=_widget_dist), name="widget")
+_static = os.path.join(os.path.dirname(__file__), "static")
+if os.path.isdir(_static):
+    app.mount("/widget", StaticFiles(directory=_static), name="widget")
 
 # CORS = Cross-Origin Resource Sharing.
 # Browsers block JS on site-A from calling an API on site-B unless the API

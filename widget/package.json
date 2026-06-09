@@ -5,6 +5,6 @@
   "type": "module",
   "scripts": {
     "demo": "npx serve demo -p 3000",
-    "build": "npx esbuild src/widget.js --bundle --outfile=dist/cby.js --minify --format=iife"
+    "build": "npx esbuild src/widget.js --bundle --outfile=../backend/static/cby.js --minify --format=iife"
   }
 }
