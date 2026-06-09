@@ -12,6 +12,8 @@ To run locally:
 """
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+import os
 
 from config import ALLOWED_ORIGINS
 from models import GenerateRequest, GenerateResponse, CartRequest, CartResponse
@@ -19,6 +21,13 @@ from services.image_gen import generate_outfit_image
 from services.supabase import get_cached_image, save_outfit_image
 
 app = FastAPI(title="CBY API", version="0.1.0")
+
+# Serve the bundled widget JS file at /widget/cby.js
+# This is what brands embed: <script src="https://your-railway-url/widget/cby.js">
+# The path "../widget/dist" is relative to the backend/ folder.
+_widget_dist = os.path.join(os.path.dirname(__file__), "..", "widget", "dist")
+if os.path.isdir(_widget_dist):
+    app.mount("/widget", StaticFiles(directory=_widget_dist), name="widget")
 
 # CORS = Cross-Origin Resource Sharing.
 # Browsers block JS on site-A from calling an API on site-B unless the API

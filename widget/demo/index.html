@@ -226,23 +226,7 @@
     };
   </script>
 
-  <!-- Widget mounts its trigger button inside #cby-mount -->
-  <script>
-    // Override where the trigger button is inserted
-    // so it sits naturally in the PDP button stack.
-    document.addEventListener('DOMContentLoaded', function() {
-      var mount = document.getElementById('cby-mount');
-      if (mount) {
-        // Move the widget root into the mount point after it's created
-        var observer = new MutationObserver(function() {
-          var root = document.querySelector('.cby-root');
-          if (root) { mount.appendChild(root); observer.disconnect(); }
-        });
-        observer.observe(document.body, { childList: true });
-      }
-    });
-  </script>
-  <script type="module" src="../src/widget.js"></script>
+  <script src="../dist/cby.js"></script>
 
 </body>
 </html>
