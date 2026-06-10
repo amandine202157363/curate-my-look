@@ -153,10 +153,10 @@
         <button class="size-btn">XL</button>
       </div>
 
-      <button class="pdp-btn pdp-btn-primary">Add to Cart</button>
-
-      <!-- CBY widget renders its trigger button here -->
+      <!-- CBY widget button sits above Add to Cart -->
       <div id="cby-mount"></div>
+
+      <button class="pdp-btn pdp-btn-primary">Add to Cart</button>
 
       <p class="pdp-desc">
         A relaxed shirt crafted from 100% European linen. Structured yet fluid,
@@ -185,6 +185,7 @@
     window.CBYConfig = {
       apiUrl: 'https://curate-my-look-production.up.railway.app',
       triggerLabel: 'Curate My Look',
+      mountTo: '#cby-mount',
       currency: 'EUR',
 
       // The product photo shown in the left panel before generation

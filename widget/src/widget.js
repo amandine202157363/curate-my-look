@@ -1,6 +1,19 @@
 /**
  * CBY Widget — "Curate By You"
- * Embed with a single script tag after setting window.CBYConfig.
+ *
+ * Embed with two script tags:
+ *   <script>window.CBYConfig = { apiUrl, categories, mountTo, ... };</script>
+ *   <script src="https://your-railway-url/widget/cby.js"></script>
+ *
+ * Config options:
+ *   apiUrl       — your Railway backend URL
+ *   categories   — { tops: [...], bottoms: [...], shoes: [...], accessories: [...] }
+ *   heroImage    — product photo shown in left panel before generation
+ *   currency     — e.g. 'EUR', 'USD', 'GBP'
+ *   triggerLabel — text on the button (default: 'Curate My Look')
+ *   mountTo      — CSS selector for where to place the button, e.g. '#cby-mount'
+ *                  If omitted, button is appended to <body>
+ *   onAddToCart  — function(items) called when shopper clicks Shop My Look
  */
 
 import { CSS } from './styles.js';
@@ -9,45 +22,69 @@ import { CSS } from './styles.js';
   'use strict';
 
   // ─── Config ────────────────────────────────────────────────────────────────
-  const config       = window.CBYConfig || {};
-  const API_URL      = (config.apiUrl || 'http://localhost:8000').replace(/\/$/, '');
-  const CURRENCY     = config.currency || 'USD';
-  const CATEGORIES   = config.categories || {};
-  const HERO_IMAGE   = config.heroImage || '';   // default product photo shown in left panel
+  const config     = window.CBYConfig || {};
+  const API_URL    = (config.apiUrl || 'http://localhost:8000').replace(/\/$/, '');
+  const CURRENCY   = config.currency || 'USD';
+  const CATEGORIES = config.categories || {};
+  const HERO_IMAGE = config.heroImage || '';
+  const MOUNT_TO   = config.mountTo || null;
   const ON_ADD_TO_CART = typeof config.onAddToCart === 'function' ? config.onAddToCart : null;
 
   const CATEGORY_LABELS = {
-    tops:        'Tops',
-    bottoms:     'Bottoms',
-    shoes:       'Shoes',
-    accessories: 'Accessories',
+    tops: 'Tops', bottoms: 'Bottoms', shoes: 'Shoes', accessories: 'Accessories',
   };
 
+  // ─── localStorage helpers ──────────────────────────────────────────────────
+  const STORAGE_KEY = 'cby_looks_v1';
+
+  function getSavedLooks() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
+    catch { return []; }
+  }
+  function persistLooks(looks) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(looks));
+  }
+  function addSavedLook(look) {
+    const looks = getSavedLooks();
+    looks.unshift(look);
+    persistLooks(looks.slice(0, 20)); // cap at 20 saved looks
+  }
+  function removeSavedLook(index) {
+    const looks = getSavedLooks();
+    looks.splice(index, 1);
+    persistLooks(looks);
+  }
+
   // ─── State ─────────────────────────────────────────────────────────────────
-  // One selected item per category, keyed by category name
-  const selected  = {};
-  // Tile scroll offsets, keyed by category name (how many tiles scrolled right)
-  const offsets   = {};
-  let generatedUrl  = null;
-  let isGenerating  = false;
+  const selected = {};
+  const offsets  = {};
+  let generatedUrl = null;
+  let isGenerating = false;
 
   // ─── Inject styles ─────────────────────────────────────────────────────────
   const styleEl = document.createElement('style');
   styleEl.textContent = CSS;
   document.head.appendChild(styleEl);
 
-  // ─── Root wrapper ──────────────────────────────────────────────────────────
-  const root = document.createElement('div');
-  root.className = 'cby-root';
-
   // ─── Trigger button ────────────────────────────────────────────────────────
+  // Mounts in mountTo element if specified, otherwise appended to body.
+  // The overlay is always on body so it's never clipped by a container.
   const trigger = document.createElement('button');
   trigger.className = 'cby-trigger';
   trigger.textContent = config.triggerLabel || 'Curate My Look';
 
-  // ─── Overlay ───────────────────────────────────────────────────────────────
+  if (MOUNT_TO) {
+    const mountEl = document.querySelector(MOUNT_TO);
+    if (mountEl) mountEl.appendChild(trigger);
+    else document.body.appendChild(trigger);
+  } else {
+    document.body.appendChild(trigger);
+  }
+
+  // ─── Overlay (always on body) ──────────────────────────────────────────────
   const overlay = document.createElement('div');
   overlay.className = 'cby-overlay';
+  document.body.appendChild(overlay);
 
   // ─── Modal ─────────────────────────────────────────────────────────────────
   const modal = document.createElement('div');
@@ -61,24 +98,28 @@ import { CSS } from './styles.js';
 
   const headerLeft = document.createElement('div');
   headerLeft.className = 'cby-header-left';
+  headerLeft.innerHTML = `
+    <span class="cby-title">Curate My Look</span>
+    <span class="cby-hint">Select items to build your outfit</span>
+  `;
 
-  const title = document.createElement('span');
-  title.className = 'cby-title';
-  title.textContent = 'Curate My Look';
+  const headerRight = document.createElement('div');
+  headerRight.className = 'cby-header-right';
 
-  const hint = document.createElement('span');
-  hint.className = 'cby-hint';
-  hint.textContent = 'Select items to build your outfit';
+  // "My Looks" button with saved count badge
+  const myLooksBtn = document.createElement('button');
+  myLooksBtn.className = 'cby-my-looks-btn';
+  myLooksBtn.innerHTML = `My Looks <span class="cby-looks-count"></span>`;
 
   const closeBtn = document.createElement('button');
   closeBtn.className = 'cby-close';
   closeBtn.setAttribute('aria-label', 'Close');
   closeBtn.textContent = '×';
 
-  headerLeft.appendChild(title);
-  headerLeft.appendChild(hint);
+  headerRight.appendChild(myLooksBtn);
+  headerRight.appendChild(closeBtn);
   header.appendChild(headerLeft);
-  header.appendChild(closeBtn);
+  header.appendChild(headerRight);
 
   // ── Body
   const body = document.createElement('div');
@@ -88,7 +129,6 @@ import { CSS } from './styles.js';
   const panelLeft = document.createElement('div');
   panelLeft.className = 'cby-panel-left';
 
-  // Hero image area
   const hero = document.createElement('div');
   hero.className = 'cby-hero';
 
@@ -103,15 +143,12 @@ import { CSS } from './styles.js';
     <div class="cby-spinner-ring"></div>
     <div class="cby-spinner-text">Generating look…</div>
   `;
-
   hero.appendChild(heroImg);
   hero.appendChild(spinnerWrap);
 
-  // Price panel
   const pricePanel = document.createElement('div');
   pricePanel.className = 'cby-price-panel';
 
-  // Buttons
   const panelBtns = document.createElement('div');
   panelBtns.className = 'cby-panel-btns';
 
@@ -120,14 +157,20 @@ import { CSS } from './styles.js';
   generateBtn.textContent = 'Generate Look';
   generateBtn.disabled = true;
 
-  const cartBtn = document.createElement('button');
-  cartBtn.className = 'cby-action-btn cby-btn-cart';
-  cartBtn.textContent = 'Add All to Cart';
+  // Save My Look — appears after generation
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'cby-action-btn cby-btn-save';
+  saveBtn.textContent = 'Save My Look';
+
+  // Shop My Look — appears after generation
+  const shopBtn = document.createElement('button');
+  shopBtn.className = 'cby-action-btn cby-btn-shop';
+  shopBtn.textContent = 'Shop My Look';
 
   panelBtns.appendChild(generateBtn);
-  panelBtns.appendChild(cartBtn);
+  panelBtns.appendChild(saveBtn);
+  panelBtns.appendChild(shopBtn);
 
-  // Error message
   const errorMsg = document.createElement('div');
   errorMsg.className = 'cby-error';
 
@@ -136,21 +179,43 @@ import { CSS } from './styles.js';
   panelLeft.appendChild(panelBtns);
   panelLeft.appendChild(errorMsg);
 
-  // ── Right panel (category rows)
+  // ── Right panel (category tile rows)
   const panelRight = document.createElement('div');
   panelRight.className = 'cby-panel-right';
 
+  // ── My Looks panel (full overlay over both panels)
+  const looksPanel = document.createElement('div');
+  looksPanel.className = 'cby-looks-panel';
+
+  const looksPanelHeader = document.createElement('div');
+  looksPanelHeader.className = 'cby-looks-panel-header';
+
+  const backBtn = document.createElement('button');
+  backBtn.className = 'cby-back-btn';
+  backBtn.innerHTML = '← Back to styling';
+
+  const looksPanelTitle = document.createElement('span');
+  looksPanelTitle.className = 'cby-looks-panel-title';
+  looksPanelTitle.textContent = 'My Looks';
+
+  looksPanelHeader.appendChild(backBtn);
+  looksPanelHeader.appendChild(looksPanelTitle);
+
+  const looksGrid = document.createElement('div');
+  looksGrid.className = 'cby-looks-grid';
+
+  looksPanel.appendChild(looksPanelHeader);
+  looksPanel.appendChild(looksGrid);
+
   body.appendChild(panelLeft);
   body.appendChild(panelRight);
+  body.appendChild(looksPanel);
 
   modal.appendChild(header);
   modal.appendChild(body);
   overlay.appendChild(modal);
-  root.appendChild(trigger);
-  root.appendChild(overlay);
-  document.body.appendChild(root);
 
-  // ─── Render helpers ────────────────────────────────────────────────────────
+  // ─── Render: price summary ─────────────────────────────────────────────────
 
   function formatPrice(p) {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: CURRENCY }).format(p);
@@ -159,15 +224,10 @@ import { CSS } from './styles.js';
   function renderPricePanel() {
     pricePanel.innerHTML = '';
     const items = Object.values(selected).filter(Boolean);
-
     if (!items.length) {
-      const empty = document.createElement('div');
-      empty.className = 'cby-price-empty';
-      empty.textContent = 'No items selected yet';
-      pricePanel.appendChild(empty);
+      pricePanel.innerHTML = '<div class="cby-price-empty">No items selected yet</div>';
       return;
     }
-
     let total = 0;
     items.forEach(function (item) {
       total += item.price;
@@ -176,7 +236,6 @@ import { CSS } from './styles.js';
       row.innerHTML = `<span>${item.name}</span><span>${formatPrice(item.price)}</span>`;
       pricePanel.appendChild(row);
     });
-
     const totalRow = document.createElement('div');
     totalRow.className = 'cby-price-total';
     totalRow.innerHTML = `<span>Total</span><span>${formatPrice(total)}</span>`;
@@ -186,40 +245,43 @@ import { CSS } from './styles.js';
   function updateButtons() {
     const count = Object.values(selected).filter(Boolean).length;
     generateBtn.disabled = count === 0 || isGenerating;
+    const hasGenerated = !!generatedUrl;
+    saveBtn.classList.toggle('cby-visible', hasGenerated);
+    shopBtn.classList.toggle('cby-visible', hasGenerated);
   }
 
-  // Builds one category section and appends it to panelRight
+  function updateLooksCount() {
+    const count = getSavedLooks().length;
+    const badge = header.querySelector('.cby-looks-count');
+    badge.textContent = count > 0 ? `(${count})` : '';
+    myLooksBtn.classList.toggle('cby-has-looks', count > 0);
+  }
+
+  // ─── Render: category tile rows ────────────────────────────────────────────
+
   function buildCategorySection(cat, items) {
-    const TILES_VISIBLE = 4;
+    const VISIBLE = 4;
     offsets[cat] = 0;
 
     const section = document.createElement('div');
     section.className = 'cby-cat-section';
-    section.dataset.cat = cat;
 
-    // Header row with label + selection badge
     const catHeader = document.createElement('div');
     catHeader.className = 'cby-cat-header';
-
-    const catLabel = document.createElement('span');
-    catLabel.className = 'cby-cat-label';
-    catLabel.textContent = CATEGORY_LABELS[cat] || cat;
 
     const badge = document.createElement('span');
     badge.className = 'cby-cat-badge';
     badge.dataset.cat = cat;
     badge.textContent = '1';
 
-    catHeader.appendChild(catLabel);
+    catHeader.innerHTML = `<span class="cby-cat-label">${CATEGORY_LABELS[cat] || cat}</span>`;
     catHeader.appendChild(badge);
 
-    // Tile row
     const tileRow = document.createElement('div');
     tileRow.className = 'cby-tile-row';
 
     const prevBtn = document.createElement('button');
     prevBtn.className = 'cby-swipe-btn';
-    prevBtn.setAttribute('aria-label', 'Previous');
     prevBtn.textContent = '‹';
     prevBtn.disabled = true;
 
@@ -228,13 +290,10 @@ import { CSS } from './styles.js';
 
     const track = document.createElement('div');
     track.className = 'cby-tiles-track';
-    track.dataset.cat = cat;
 
     items.forEach(function (item) {
       const tile = document.createElement('div');
       tile.className = 'cby-tile';
-      tile.dataset.id = item.id;
-      tile.dataset.cat = cat;
       tile.innerHTML = `
         <img src="${item.image_url}" alt="${item.name}" loading="lazy" />
         <div class="cby-tile-dot"></div>
@@ -250,47 +309,38 @@ import { CSS } from './styles.js';
 
     const nextBtn = document.createElement('button');
     nextBtn.className = 'cby-swipe-btn';
-    nextBtn.setAttribute('aria-label', 'Next');
     nextBtn.textContent = '›';
-    nextBtn.disabled = items.length <= TILES_VISIBLE;
+    nextBtn.disabled = items.length <= VISIBLE;
 
-    // Prev/next scroll logic
     prevBtn.addEventListener('click', function () {
       offsets[cat] = Math.max(0, offsets[cat] - 1);
-      updateTrack(track, cat, items.length, TILES_VISIBLE, prevBtn, nextBtn);
+      slideTrack(track, cat, items.length, VISIBLE, prevBtn, nextBtn);
     });
     nextBtn.addEventListener('click', function () {
-      offsets[cat] = Math.min(items.length - TILES_VISIBLE, offsets[cat] + 1);
-      updateTrack(track, cat, items.length, TILES_VISIBLE, prevBtn, nextBtn);
+      offsets[cat] = Math.min(items.length - VISIBLE, offsets[cat] + 1);
+      slideTrack(track, cat, items.length, VISIBLE, prevBtn, nextBtn);
     });
 
     tileRow.appendChild(prevBtn);
     tileRow.appendChild(tilesWrap);
     tileRow.appendChild(nextBtn);
-
     section.appendChild(catHeader);
     section.appendChild(tileRow);
     panelRight.appendChild(section);
   }
 
-  function updateTrack(track, cat, total, visible, prevBtn, nextBtn) {
-    // Each tile is 25% of the wrap width + 8px gap
+  function slideTrack(track, cat, total, visible, prevBtn, nextBtn) {
     const tileW = track.parentElement.offsetWidth * 0.25 - 6;
-    const shift = offsets[cat] * (tileW + 8);
-    track.style.transform = `translateX(-${shift}px)`;
+    track.style.transform = `translateX(-${offsets[cat] * (tileW + 8)}px)`;
     prevBtn.disabled = offsets[cat] === 0;
     nextBtn.disabled = offsets[cat] >= total - visible;
   }
 
   function onTileClick(cat, item, tile, track, badge) {
-    const isAlreadySelected = selected[cat] && selected[cat].id === item.id;
+    const alreadySelected = selected[cat] && selected[cat].id === item.id;
+    track.querySelectorAll('.cby-tile').forEach(function (t) { t.classList.remove('cby-selected'); });
 
-    // Deselect all tiles in this category
-    track.querySelectorAll('.cby-tile').forEach(function (t) {
-      t.classList.remove('cby-selected');
-    });
-
-    if (isAlreadySelected) {
+    if (alreadySelected) {
       delete selected[cat];
       badge.classList.remove('cby-visible');
     } else {
@@ -299,14 +349,74 @@ import { CSS } from './styles.js';
       badge.classList.add('cby-visible');
     }
 
-    // Reset generated image when selection changes
+    // Changing selection resets any generated image
     generatedUrl = null;
     heroImg.src = HERO_IMAGE;
     heroImg.classList.remove('cby-contain');
-    cartBtn.classList.remove('cby-visible');
-
     renderPricePanel();
     updateButtons();
+  }
+
+  // ─── Render: My Looks panel ────────────────────────────────────────────────
+
+  function renderLooksPanel() {
+    looksGrid.innerHTML = '';
+    const looks = getSavedLooks();
+
+    if (!looks.length) {
+      looksGrid.innerHTML = `
+        <div class="cby-looks-empty">
+          <div class="cby-looks-empty-icon">◻</div>
+          <div class="cby-looks-empty-text">No saved looks yet.<br>Generate an outfit and save it here.</div>
+        </div>`;
+      return;
+    }
+
+    looks.forEach(function (look, index) {
+      const card = document.createElement('div');
+      card.className = 'cby-look-card';
+
+      const total = look.items.reduce(function (s, i) { return s + i.price; }, 0);
+
+      card.innerHTML = `
+        <div class="cby-look-img-wrap">
+          <img src="${look.image_url}" alt="Saved look" />
+        </div>
+        <div class="cby-look-info">
+          <div class="cby-look-items">${look.items.map(function(i){ return i.name; }).join(', ')}</div>
+          <div class="cby-look-price">${formatPrice(total)}</div>
+        </div>
+        <div class="cby-look-actions">
+          <button class="cby-action-btn cby-btn-shop-look">Shop This Look</button>
+          <button class="cby-look-delete" aria-label="Remove look">×</button>
+        </div>
+      `;
+
+      card.querySelector('.cby-btn-shop-look').addEventListener('click', function () {
+        if (ON_ADD_TO_CART) {
+          ON_ADD_TO_CART(look.items);
+        } else {
+          alert('[CBY] Set onAddToCart in CBYConfig to handle cart logic.');
+        }
+      });
+
+      card.querySelector('.cby-look-delete').addEventListener('click', function () {
+        removeSavedLook(index);
+        updateLooksCount();
+        renderLooksPanel();
+      });
+
+      looksGrid.appendChild(card);
+    });
+  }
+
+  function openLooksPanel() {
+    renderLooksPanel();
+    looksPanel.classList.add('cby-open');
+  }
+
+  function closeLooksPanel() {
+    looksPanel.classList.remove('cby-open');
   }
 
   // ─── API ───────────────────────────────────────────────────────────────────
@@ -330,16 +440,14 @@ import { CSS } from './styles.js';
         body: JSON.stringify({ items }),
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
+        const err = await res.json().catch(function () { return {}; });
         throw new Error(err.detail || `Error ${res.status}`);
       }
       const data = await res.json();
       generatedUrl = data.image_url;
-
       heroImg.src = generatedUrl;
       heroImg.classList.add('cby-contain');
       heroImg.style.opacity = '1';
-      cartBtn.classList.add('cby-visible');
     } catch (err) {
       errorMsg.textContent = 'Could not generate image. Please try again.';
       errorMsg.classList.add('cby-visible');
@@ -353,28 +461,44 @@ import { CSS } from './styles.js';
     }
   }
 
-  function handleAddToCart() {
+  function handleSave() {
+    if (!generatedUrl) return;
+    const items = Object.values(selected).filter(Boolean);
+    addSavedLook({ image_url: generatedUrl, items: items, saved_at: Date.now() });
+    updateLooksCount();
+
+    // Brief confirmation on the button
+    saveBtn.textContent = 'Saved ✓';
+    saveBtn.disabled = true;
+    setTimeout(function () {
+      saveBtn.textContent = 'Save My Look';
+      saveBtn.disabled = false;
+    }, 2000);
+  }
+
+  function handleShop() {
     const items = Object.values(selected).filter(Boolean);
     if (!items.length) return;
     if (ON_ADD_TO_CART) {
       ON_ADD_TO_CART(items);
     } else {
-      console.info('[CBY] Wire up window.CBYConfig.onAddToCart to handle cart logic:', items);
-      alert(`${items.length} item(s) ready. Set window.CBYConfig.onAddToCart to handle cart.`);
+      console.info('[CBY] Set window.CBYConfig.onAddToCart to handle cart logic:', items);
+      alert(`${items.length} item(s) ready. Set window.CBYConfig.onAddToCart to connect your cart.`);
     }
   }
 
-  // ─── Open / close ──────────────────────────────────────────────────────────
+  // ─── Open / close modal ────────────────────────────────────────────────────
 
   function openModal() {
     overlay.classList.add('cby-open');
     document.body.style.overflow = 'hidden';
-    closeBtn.focus();
+    updateLooksCount();
   }
 
   function closeModal() {
     overlay.classList.remove('cby-open');
     document.body.style.overflow = '';
+    closeLooksPanel();
   }
 
   // ─── Event listeners ───────────────────────────────────────────────────────
@@ -382,7 +506,10 @@ import { CSS } from './styles.js';
   trigger.addEventListener('click', openModal);
   closeBtn.addEventListener('click', closeModal);
   generateBtn.addEventListener('click', callGenerate);
-  cartBtn.addEventListener('click', handleAddToCart);
+  saveBtn.addEventListener('click', handleSave);
+  shopBtn.addEventListener('click', handleShop);
+  myLooksBtn.addEventListener('click', openLooksPanel);
+  backBtn.addEventListener('click', closeLooksPanel);
   overlay.addEventListener('click', function (e) {
     if (e.target === overlay) closeModal();
   });
@@ -396,5 +523,7 @@ import { CSS } from './styles.js';
     buildCategorySection(cat, CATEGORIES[cat]);
   });
   renderPricePanel();
+  updateButtons();
+  updateLooksCount();
 
 })();
